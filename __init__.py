@@ -1,0 +1,1 @@
+from .test_brick import SmoothSpmScipy
