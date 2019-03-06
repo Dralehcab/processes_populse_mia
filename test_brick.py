@@ -1,70 +1,109 @@
 import os
 import traits.api as traits  # used to declare the inputs/outputs of the process
-from traits.api import Array, HasTraits, NO_COMPARE
+from traits.api import CArray, HasTraits, NO_COMPARE
 import nibabel as nib  # used to read and save Nifti images
 from nipype.interfaces import spm  # used to use SPM's Smooth
 from scipy.ndimage.filters import gaussian_filter  # used to apply the smoothing on an array
 from populse_mia.pipeline_manager.process_mia import ProcessMIA  # base class that the created process has to inherit from
-
-class Array(HasTraits):
-    x = Array(comparison_mode=NO_COMPARE)
-
-    def _x_changed(self):
-        print('Array Changed')
+import numpy as np
 
 
-class File_To_Array(ProcessMIA):
-    """
--  Files_To_List (mia_processes.tools.tools.Files_To_List)
-*** From 2 file names, generating a list containing all theses file names ***
-    '/home/ArthurBlair/data/raw_data/Anat.nii ' + '/home/ArthurBlair/data/raw_data/Func.nii' -> Files_To_List ->
-    ['/home/ArthurBlair/data/raw_data/Anat.nii', '/home/ArthurBlair/data/raw_data/Func.nii']
-    * Input parameters:
-        * file1: a string corresponding to an existing path file (traits.File)
-            <ex. /home/ArthurBlair/data/raw_data/Anat.nii>
-        * file2: a string corresponding to an existing path file (traits.File)
-            <ex. /home/ArthurBlair/data/raw_data/Func.nii>
-    * Output parameters:
-        * file_list: a list (traits.List)
-            <ex. ['/home/ArthurBlair/data/raw_data/Anat.nii',
-                 '/home/ArthurBlair/data/Func.nii']>
-    """
+class ArrayToFile(ProcessMIA):
 
     def __init__(self):
-        super(File_To_Array, self).__init__()
+        super(SmoothArray, self).__init__()
 
         # Inputs description
-        file_desc = '3D input file'
+        file_desc = '3D Input Array'
+
+        # Outputs description
+        array_desc = '3D Output Array'
+
+        # Inputs traits
+        self.add_trait("input_array", CArray(output=False, optional=False, desc=array_desc))
+        self.add_trait("fwhm", traits.List(traits.Float(), [1.0, 1.0, 1.0], output=False, optional=True,
+                                           desc='List of fwhm for each dimension (in mm)'))
+        # Outputs traits
+        trait_array = CArray(output=True, optional=False, desc=array_desc)
+        self.add_trait("output_array", trait_array)
+
+    def list_outputs(self):
+        super(SmoothArray, self).list_outputs()
+        return {"<undefined>": []}, {}
+
+    def _run_process(self):
+
+        # Convert the fwhm for each dimension from mm to pixel
+        print('Smoothing')
+        sigma = [pixel_fwhm_dim / 2.355 for pixel_fwhm_dim in self.fwhm]  # Converting fwmh to sigma
+        self.output_array = gaussian_filter(self.input_array, sigma)  # Filtering the array
+
+
+
+
+
+
+class SmoothArray(ProcessMIA):
+
+    def __init__(self):
+        super(SmoothArray, self).__init__()
+
+        # Inputs description
+        file_desc = '3D Input Array'
+
+        # Outputs description
+        array_desc = '3D Output Array'
+
+        # Inputs traits
+        self.add_trait("input_array", CArray(output=False, optional=False, desc=array_desc))
+        self.add_trait("fwhm", traits.List(traits.Float(), [1.0, 1.0, 1.0], output=False, optional=True,
+                                           desc='List of fwhm for each dimension (in mm)'))
+        # Outputs traits
+        trait_array = CArray(output=True, optional=False, desc=array_desc)
+        self.add_trait("output_array", trait_array)
+
+    def list_outputs(self):
+        super(SmoothArray, self).list_outputs()
+        return {"<undefined>": []}, {}
+
+    def _run_process(self):
+
+        # Convert the fwhm for each dimension from mm to pixel
+        print('Smoothing')
+        sigma = [pixel_fwhm_dim / 2.355 for pixel_fwhm_dim in self.fwhm]  # Converting fwmh to sigma
+        self.output_array = gaussian_filter(self.input_array, sigma)  # Filtering the array
+
+
+
+class FileToArray(ProcessMIA):
+
+    def __init__(self):
+        super(FileToArray, self).__init__()
+
+        # Inputs description
+        file_desc = '3D Input file'
 
         # Outputs description
         array_desc = '3D Output Array'
 
         # Inputs traits
         self.add_trait("file_image",traits.File(output=False,desc=file_desc))
+
         # Outputs traits
-        trait_array = Array(output=True,optional=False,desc=array_desc)
-        trait_array._metadata = {'output': True, 'optional': False,'desc': 'Metadata'}
-        trait_array.output = True
-        trait_array.optional = False
-
-
+        trait_array = CArray(output=True, optional=False, desc=array_desc)
         self.add_trait("output_array",trait_array)
 
-        self.add_trait("file_list",traits.List(output=False,desc='T'))
-
     def list_outputs(self):
-        super(File_To_Array, self).list_outputs()
-        return {'output_array': []}, {}
+        super(FileToArray, self).list_outputs()
+        return {"<undefined>":[]},{}
 
-
-    def run_process_mia(self):
-        print('Test')
-
-
-
-
-
-
+    def _run_process(self):
+        if not self.file_image:
+            print('"in_file" plug is mandatory for a Conversion Process')
+            return
+        else:
+            input_image = nib.load(self.file_image)  # Loading the nibabel image
+            self.output_array = np.array(input_image.get_data())  # Getting the 3D volume as a numpy array
 
 
 class SmoothSpmScipy(ProcessMIA):
