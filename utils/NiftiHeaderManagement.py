@@ -14,7 +14,7 @@ class NiftiHeaderManagement():
         if path_jason != '':
             filename, file_extension = os.path.splitext(path_jason)
 
-            if os.path.isfile(path_jason) and (file_extension in ['JSON', 'json']):
+            if os.path.isfile(path_jason) and (file_extension in ['.JSON', '.json']):
                 self.path_jason = path_jason
             else:
                 print('Unrecognized Jason File')
@@ -30,7 +30,7 @@ class NiftiHeaderManagement():
 
         filename, file_extension = os.path.splitext(path_jason)
 
-        if os.path.exists(os.path.dirname(path_jason)) and (file_extension in ['.JSON','.json']):
+        if os.path.exists(os.path.dirname(path_jason)) and (file_extension in ['.JSON', '.json']):
             self.path_jason = path_jason
         else:
             print('Unrecognized Jason File')
@@ -46,7 +46,6 @@ class NiftiHeaderManagement():
 
         dic = {}
 
-        print(self.nib_header)
 
         for field in self.nib_header:
 
@@ -68,12 +67,11 @@ class NiftiHeaderManagement():
             dic = json.load(f)
 
         self.nib_header = nib.Nifti1Header()
-        print(self.nib_header)
         for field in self.nib_header:
             if field in dic:
                 self.nib_header[field] = dic[field]
 
-        print(self.nib_header)
+        return self.nib_header
 
 if __name__ == '__main__':
     path_nifti = "/Data/MIA_Data/Test_Project/Test1/data/raw_data" \
@@ -84,6 +82,7 @@ if __name__ == '__main__':
 
     input_image = nib.load(path_nifti)  # Loading the nibabel image
     input_image_header = input_image.header
+    print(input_image.affine)
     nifti = NiftiHeaderManagement()
     nifti.set_nib_header(input_image_header)
     nifti.set_path_jason(path_jason)

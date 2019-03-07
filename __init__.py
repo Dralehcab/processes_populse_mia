@@ -1,3 +1,2 @@
-from .test_brick import FileToArray
-from .test_brick import SmoothSpmScipy
-from .test_brick import SmoothArray
+from .Nifti_array_conversion import NiftiToArray
+from .Nifti_array_conversion import ArrayToNifti

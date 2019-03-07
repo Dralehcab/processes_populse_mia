@@ -6,6 +6,10 @@ from nipype.interfaces import spm  # used to use SPM's Smooth
 from scipy.ndimage.filters import gaussian_filter  # used to apply the smoothing on an array
 from populse_mia.pipeline_manager.process_mia import ProcessMIA  # base class that the created process has to inherit from
 import numpy as np
+import sys
+
+sys.path.append('/home/broche/Code/Python/processes_populse_mia/utils')
+from NiftiHeaderManagement import NiftiHeaderManagement
 
 
 class ArrayToFile(ProcessMIA):
@@ -26,6 +30,7 @@ class ArrayToFile(ProcessMIA):
         # Outputs traits
         trait_array = CArray(output=True, optional=False, desc=array_desc)
         self.add_trait("output_array", trait_array)
+
 
     def list_outputs(self):
         super(SmoothArray, self).list_outputs()
