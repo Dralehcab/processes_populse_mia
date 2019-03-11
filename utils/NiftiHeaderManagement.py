@@ -44,8 +44,9 @@ class NiftiHeaderManagement():
 
     def save_header_to_jason(self):
 
-        dic = {}
+        print('IN Jason')
 
+        dic = {}
 
         for field in self.nib_header:
 
@@ -60,18 +61,22 @@ class NiftiHeaderManagement():
 
         with open(self.path_jason, 'w+') as fp:
             json.dump(dic, fp)
+        fp.close()
 
     def load_jason_to_header(self):
 
         with open(self.path_jason) as f:
             dic = json.load(f)
 
+        f.close()
+
         self.nib_header = nib.Nifti1Header()
+
         for field in self.nib_header:
             if field in dic:
                 self.nib_header[field] = dic[field]
 
-        return self.nib_header
+        return self.nib_header,[self.nib_header["srow_x"],self.nib_header["srow_y"],self.nib_header["srow_z"],[0,0,0,1]]
 
 if __name__ == '__main__':
     path_nifti = "/Data/MIA_Data/Test_Project/Test1/data/raw_data" \
@@ -81,11 +86,18 @@ if __name__ == '__main__':
     path_jason = "./test.json"
 
     input_image = nib.load(path_nifti)  # Loading the nibabel image
+    array_in = np.array(input_image.get_data())
     input_image_header = input_image.header
-    print(input_image.affine)
     nifti = NiftiHeaderManagement()
     nifti.set_nib_header(input_image_header)
     nifti.set_path_jason(path_jason)
     nifti.save_header_to_jason()
-    nifti.load_jason_to_header()
+
+    nifti2 = NiftiHeaderManagement()
+    nifti2.set_path_jason(path_jason)
+    jason_header, affine = nifti2.load_jason_to_header()
+
+    nifti_image = nib.Nifti1Image(array_in, affine, jason_header)
+
+    nib.save(nifti_image, './test.nii')
 
