@@ -19,7 +19,6 @@ class NiftiToArray(ProcessMIA):
     """
 
     def __init__(self):
-        print('Init Nifti2Array')
         super(NiftiToArray, self).__init__()
 
         # Inputs description
@@ -41,7 +40,6 @@ class NiftiToArray(ProcessMIA):
 
     def list_outputs(self):
         super(NiftiToArray, self).list_outputs()
-        print('List_outputs Nifti2Array')
 
         # Generating the filename by hand
         if not self.file_image_in:
@@ -60,7 +58,7 @@ class NiftiToArray(ProcessMIA):
         return output_dict, inheritance_dict
 
     def _run_process(self):
-        print('Run Process Nifti2Array')
+
         if not self.file_image_in:
             print('"in_file" plug is mandatory for a Conversion Process')
             return
@@ -77,8 +75,6 @@ class NiftiToArray(ProcessMIA):
             out_filename = os.path.splitext(out_filename)[0] + '.json'
 
             jason_header.set_path_jason( os.path.join(path, out_filename))
-            print('Saving Jason')
-            print(out_filename)
             jason_header.save_header_to_jason()
 
 
@@ -89,8 +85,6 @@ class ArrayToNifti(ProcessMIA):
 
     def __init__(self):
         super(ArrayToNifti, self).__init__()
-        print('Init Array2Nifti')
-
 
         # Inputs description
         array_desc = '3D Input Array'
@@ -109,7 +103,6 @@ class ArrayToNifti(ProcessMIA):
 
     def list_outputs(self):
         super( ArrayToNifti, self).list_outputs()
-        print('list_outputs Array2Nifti')
 
         # Generating the filename by hand
         if not self.nifti_jason_header_in:
@@ -127,9 +120,7 @@ class ArrayToNifti(ProcessMIA):
         return output_dict, inheritance_dict
 
 
-
     def _run_process(self):
-        print('run_process Array2Nifti')
         if not self.nifti_jason_header_in:
             print('"Nifti Header Jason" plug is mandatory for a Conversion Process')
             return
@@ -137,9 +128,6 @@ class ArrayToNifti(ProcessMIA):
 
             jason_header = NiftiHeaderManagement()
             jason_header.set_path_jason(self.nifti_jason_header_in)
-            print('*****')
-            print(self.nifti_jason_header_in)
-            print('*****')
             header, affine = jason_header.load_jason_to_header()
 
             nifti_image = nib.Nifti1Image(self.array_in, affine, header)

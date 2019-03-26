@@ -44,8 +44,6 @@ class NiftiHeaderManagement():
 
     def save_header_to_jason(self):
 
-        print('IN Jason')
-
         dic = {}
 
         for field in self.nib_header:
