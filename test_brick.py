@@ -43,11 +43,6 @@ class ArrayToFile(ProcessMIA):
         sigma = [pixel_fwhm_dim / 2.355 for pixel_fwhm_dim in self.fwhm]  # Converting fwmh to sigma
         self.output_array = gaussian_filter(self.input_array, sigma)  # Filtering the array
 
-
-
-
-
-
 class SmoothArray(ProcessMIA):
 
     def __init__(self):
