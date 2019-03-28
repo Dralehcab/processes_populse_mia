@@ -5,8 +5,8 @@ import os
 import numpy as np
 import sys
 
-sys.path.append('/home/broche/Code/Python/processes_populse_mia/utils')
-from NiftiHeaderManagement import NiftiHeaderManagement
+sys.path.append('/home/broche/Code/Python/processes_populse_mia/image_processing/')
+from RegistrationIP import Registering
 
 
 class RegisterProcess(ProcessMIA):
@@ -48,7 +48,7 @@ class RegisterProcess(ProcessMIA):
 
         #Grid Size
 
-        self.add_trait("grid_size", traits.List(traits.Float(), [20.0, 20.0, 20.0], output=False, optional=True,
+        self.add_trait("grid_size", traits.List(traits.Float(), [40.0, 40.0, 40.0], output=False, optional=True,
                                            desc='Registration Grid Nodes Interspace In X,Y and Z direction'))
 
         #Gradient Image
@@ -86,8 +86,9 @@ class RegisterProcess(ProcessMIA):
                         '"Conjugate Gradient Line Search","LBFGSB","Powell","Amoeba")'))
 
 
-        self.add_trait("optimizer_parameters", traits.List(traits.Float(), [1.0, 1.0], output=False, optional=True,
-                                           desc='List of optimizer parameters (see documentation for more details)'))
+        self.add_trait("optimizer_parameters", traits.List(traits.Float(), [1.0,0.1,10,0.5,0.0001,0,0.0],
+                        output=False, optional=True,
+                        desc='List of optimizer parameters (see documentation for more details)'))
 
 
 
@@ -98,12 +99,12 @@ class RegisterProcess(ProcessMIA):
                         desc='Maximum Learning Rate allowed if reestimated'))
 
 
-        self.add_trait("optimizer scale method ", traits.Enum('None', 'Index Shift', 'Jacobian','Physical Shift',
+        self.add_trait("optimizer_scale_method", traits.Enum('None', 'Index Shift', 'Jacobian','Physical Shift',
                         output=False, optional=True,
                         desc='Define the automatic Method to Scale the optizer parameters ("None", "Index Shift",'
                         ' "Jacobian","Physical Shift")'))
 
-        self.add_trait("optimizer_scale_paramters", traits.List(traits.Float(), [1.0, 1.0], output=False, optional=True,
+        self.add_trait("optimizer_scale_parameters", traits.List(traits.Float(), [1.0, 1.0], output=False, optional=True,
                         desc='List of optimizer scale parameters (see documentation for more details)'))
 
 
@@ -127,10 +128,22 @@ class RegisterProcess(ProcessMIA):
                                         desc='Smoothing Factor for each Resolution Step'))
 
         #Ouputs
-        registered_image_desc = "Ouput Image Registered"
-        trait_array = CArray(output=True, optional=False, desc=registered_image_desc)
+        registered_image_desc = "Output Image Registered"
+        trait_array = CArray(output=True, optional=True, desc=registered_image_desc)
         self.add_trait("registered_image", trait_array)
-        self.add_trait("registered_image_jason", traits.File(output=True, optional=False))
+        self.add_trait("registered_image_jason", traits.File(output=True, optional=True))
+
+        chess_image_desc = "Output Image Chess Comparison"
+        trait_array = CArray(output=True, optional=True, desc=chess_image_desc)
+        self.add_trait("chess_image", trait_array)
+        self.add_trait("chess_image_jason", traits.File(output=True, optional=True))
+
+        vector_image_desc = "Output Image Vector Field"
+        trait_array = CArray(output=True, optional=True, desc=vector_image_desc)
+        self.add_trait("vector_image", trait_array)
+        self.add_trait("vector_image_jason", traits.File(output=True, optional=True))
+
+        self.add_trait("registration_info_file", traits.File(output=True, optional=True))
 
 
     def list_outputs(self):
@@ -142,25 +155,155 @@ class RegisterProcess(ProcessMIA):
     def _run_process(self):
 
 
-        fix_image_desc = "Input Fixed Image"
-        trait_array = CArray(output=False, optional=False, desc=fix_image_desc)
-        self.add_trait("fix_image",trait_array)
-        self.add_trait("fix_image_jason", traits.File(output=False))
-
-        mov_image_desc = "Input Moving Image"
-        trait_array = CArray(output=False, optional=False, desc=mov_image_desc)
-        self.add_trait("mov_image", trait_array)
-        self.add_trait("mov_image_jason", traits.File(output=False))
-
-        fix_rigid_image_desc = "Input fixed Initial Rigid Transform"
-        trait_array = CArray(output=False, optional=True, desc=fix_rigid_image_desc)
-        self.add_trait("fix_rigid_image", trait_array)
-        self.add_trait("fix_rigid_jason", traits.File(output=False,optional=True))
-
-        mov_rigid_image_desc = "Input moving Initial Rigid Transform"
-        trait_array = CArray(output=False, optional=True, desc=mov_rigid_image_desc)
-        self.add_trait("mov_rigid_image", trait_array)
-        self.add_trait("mov_rigid_jason", traits.File(output=False,optional=True))
+        print('In process')
+        # Initialising parameters dictionnary
+        self.dicPar = {'Grid': [0, 0, 0], 'Inputs': {}, 'Outputs': {}, 'Metric': {}, 'Optimizer': {},
+                       'Interpolator': {}, 'Scaling': [0, 0, 0, 0, 0, 0, 0, 0]}
 
 
-        image_matrix = [sels.f
+        self.dicPar['Metric']['Sampling'] =  {'Method':'None','Percentage': 0.5}
+        self.dicPar['Optimizer']['Par'] = [0,1,2,3,4,5,6,7,8,9,10]
+
+
+        # Setting Image Array and Info
+        if self.fix_image != [] and self.mov_image != []:
+            image_matrix = [self.fix_image,self.mov_image,self.fix_rigid_image,self.mov_rigid_image]
+            image_info_file = [self.fix_image_jason,self.mov_image_jason,self.fix_rigid_jason,self.mov_rigid_jason]
+
+
+        else:
+            print("Missing fixed or moving Image")
+
+        self.dicPar['Inputs']['Images_Array'] = image_matrix
+        self.dicPar['Inputs']['Image_info_files'] = image_info_file
+
+        # Setting Initial Transform
+
+        if self.initial_transform in ['None', 'Geometry', 'Moments']:
+            self.dicPar['Inputs']['InitT'] = self.initial_transform
+        else:
+            print('Unrecognized Initial Transform Method')
+
+
+        #Setting Grid Size
+
+        if len(self.grid_size) == 3:
+            self.dicPar['Grid'] = np.array(self.grid_size)
+
+        else:
+            print('Uncorrect Grid Vector')
+            print('Setting Grid to default value [40.0,40.0,40.0]')
+            self.dicPar['Grid'] = [40.0,40.0,40.0]
+
+        #Setting Gradient Image Flag
+
+        if bool(self.gradient_flag):
+            self.dicPar['Metric']['GradF'] = 1
+            self.dicPar['Metric']['GradM'] = 1
+        else:
+            self.dicPar['Metric']['GradF'] = 0
+            self.dicPar['Metric']['GradM'] = 0
+
+        # Setting the Metric Parameters
+
+        list_method = ["Means Squares","Correlation","Demons","Joint Histogram Mutual Information",
+                       "Mattes Mutual Information","Neighborhood Correlation (ANTs)"]
+
+        if self.metric_method in list_method:
+            self.dicPar['Metric']['Method'] = self.metric_method
+            self.dicPar['Metric']['Par'] = np.array(self.metric_parameters)
+        else:
+            print("Unrecognized Metric Method")
+            print('Setting Metric to Default Method : MeanSquare')
+            self.dicPar['Metric']['Method'] = "Means Squares"
+
+        self.dicPar['Metric']['Par'] = self.metric_parameters
+
+        list_method = ["None", "Regular", "Random"]
+
+        if self.sampling_strategy in list_method:
+            self.dicPar['Metric']['Sampling']['Method'] = self.sampling_strategy
+        else:
+            print("Unrecognized Sampling Strategy Method")
+            print('Setting Sampling Strategy to Default Method : None')
+            self.dicPar['Metric']['Sampling']['Method'] = 'None'
+
+        self.dicPar['Metric']['Sampling']['Percentage'] = self.sampling_strategy_parameters
+
+        # Setting the Optimizer
+        list_method = ['Regular Step Gradient Descent', 'Gradient Descent','Gradient Descent Line Search',
+                       'Conjugate Gradient Line Search','LBFGSB', 'Powell', 'Amoeba',]
+
+        if self.optimizer_method in list_method:
+            self.dicPar['Optimizer']['Method'] = self.optimizer_method
+            self.dicPar['Optimizer']['Par'] = self.optimizer_parameters
+
+        else:
+            print("Unrecognized Optimizer Method")
+            print('Setting Optimizer Method to Default Method : "Regular Step Gradient Descent":')
+            self.dicPar['Optimizer']['Method'] = "Regular Step Gradient Descent"
+            self.dicPar['Optimizer']['Par'] = [1.0, 0.1, 10, 0.5, 0.0001, 0, 0.0]
+
+
+        list_method = ['Never', 'Once', 'Each Iteration']
+
+        if self.learning_rate_estimation in list_method:
+            if  self.learning_rate_estimation == "Never":
+                self.dicPar['Optimizer']['Par'].append(0)
+                self.dicPar['Optimizer']['Par'].append(self.maximum_learning_rate)
+            elif self.learning_rate_estimation == "Once":
+                self.dicPar['Optimizer']['Par'].append(1)
+                self.dicPar['Optimizer']['Par'].append(self.maximum_learning_rate)
+            elif self.learning_rate_estimation == "Each Iteration":
+                self.dicPar['Optimizer']['Par'].append(2)
+                self.dicPar['Optimizer']['Par'].append(self.maximum_learning_rate)
+
+        else:
+            print("Unrecognized Learning Rate Method")
+            print('Setting Learning Rate Method to Default value : "Never":')
+            self.dicPar['Optimizer']['Par'].append(0)
+            self.dicPar['Optimizer']['Par'].append(20.0)
+
+        list_method = ['None', 'Index Shift', 'Jacobian','Physical Shift']
+
+        if self.optimizer_scale_method in list_method:
+            self.dicPar['Optimizer']['MethodScaling'] = self.optimizer_scale_method
+            self.dicPar['Optimizer']['ScalePar'] = self.optimizer_scale_parameters
+
+        else:
+            print("Unrecognized Optimizer Scale Method: ")
+            print('Setting  Optimizer Scale Method to Default value : "None":')
+            self.dicPar['Optimizer']['MethodScaling'] = 'None'
+
+
+        # Setting Interpolator
+        list_method = ['Nearest neighbor', 'Linear Interpolation', 'BSpline','Gaussian','Label Gaussian',
+                       'Hamming Windowed Sinc','Cosine Windowed Sinc','Welch Windowed Sinc','Lanczos Windowed Sinc',
+                       'Blackman Windowed Sinc']
+
+        if self.interpolator in list_method:
+            self.dicPar['Interpolator'] = self.interpolator
+        else:
+            print("Unrecognized Interpolator")
+            print('Setting Interpolator to Default Method : "Nearest neighbor"')
+            self.dicPar['Optimizer']['Method'] = 'Nearest neighbor'
+
+        #Setting Scaling
+
+        if len(self.image_scaling ) > 0:
+            self.dicPar['Scaling'] = self.image_scaling
+        else:
+            print("Unrecognized Registration Scaling")
+            print('Setting Scaling to : [16,8,4,2,1]')
+            self.dicPar['Scaling'] = [16.0, 8.0,4.0,2.0,1.0]
+
+
+        if len(self.image_smoothing) != len(self.image_scaling):
+            self.dicPar['Scaling'] = self.image_scaling
+        else:
+            print("Unrecognized Registration Smoothing")
+            print('Setting Smoothing to : [0,0,0,0,0]')
+            self.dicPar['Smoothing'] = [0.0,0.0,0.0,0.0,0.0]
+
+        self.R = Registering(self.dicPar)
+        self.R.Execute()
