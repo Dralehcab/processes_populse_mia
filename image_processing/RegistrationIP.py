@@ -47,12 +47,13 @@ class Registering():
 
     def setImages(self):
 
-        self.ImageFixe = imageFromNumpyToITK(self.ImageStack[0])
-        self.ImageMoving = imageFromNumpyToITK(self.ImageStack[1])
+        self.ImageFixe = imageFromNumpyToITK(self.ImageStack[0]*1000.0)
+        self.ImageMoving = imageFromNumpyToITK(self.ImageStack[1]*1000.0)
 
-        if self.dicParself.dicPar['Inputs']['InitT'] != 'None':
-            self.ImageInitFixe = imageFromNumpyToITK(self.ImageStack[2])
-            self.ImageInitMoving = imageFromNumpyToITK(self.ImageStack[3])
+
+        if self.dicPar['Inputs']['InitT'] != 'None':
+            self.ImageInitFixe = imageFromNumpyToITK(self.ImageStack[2]*1000.0)
+            self.ImageInitMoving = imageFromNumpyToITK(self.ImageStack[3]*1000.0)
 
 
 
@@ -302,8 +303,14 @@ class Registering():
 
     def initScaling(self):
 
-        vect1 = np.int(np.array(self.dicPar['Scaling']))
-        vect2 = np.array(self.dicPar['Smoothing'])
+        vect1 = []
+        vect2 = []
+
+        for i in range(0, int(len(self.dicPar['Scaling']))):
+            parS = int(self.dicPar['Scaling'][i])
+            parSm = float(self.dicPar['Scaling'][i])
+            vect1.append(parS)
+            vect2.append(parSm)
 
         self.reg_method.SetShrinkFactorsPerLevel(vect1)
         self.reg_method.SetSmoothingSigmasPerLevel(vect2)
@@ -311,8 +318,9 @@ class Registering():
         self.reg_method.SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
 
     def Execute(self):
-
+        print(self.reg_method)
         self.Final_Transform = self.reg_method.Execute(self.ImageFixe, self.ImageMoving)
+        print('Done Executing')
 
     def computeJacobian(self, vectorFieldITK):
 
@@ -361,18 +369,77 @@ class Registering():
         return combined_isotropic
 
     def returnNumpyImage(self):
+        print('Returning')
         self.ImageMovingBef = imageFromITKToNumpy(self.ImageMoving)
         self.ImageFixedBef = imageFromITKToNumpy(self.ImageFixe)
+        print('Transforming Moving')
         self.ImageMoving = sitk.Resample(self.ImageMoving, self.ImageFixe, self.Final_Transform, self.interpolator, 0.0,
                                          self.ImageMoving.GetPixelIDValue())
+        self.ImageMoving
         ImageOut = imageFromITKToNumpy(self.ImageMoving)
-
+        print('Chess Image')
+        self.chessImage = self.giveChessImage(self.ImageFixedBef,ImageOut,10)
+        print('Transform Field Displacement ')
         FilterTransform = sitk.TransformToDisplacementFieldFilter()
         FilterTransform.SetReferenceImage(self.ImageFixe)
         self.displacementField = FilterTransform.Execute(self.Final_Transform)
+        print("Jacob")
         self.transformOut = imageFromITKToNumpy(self.displacementField)
         vectorJacob = self.computeJacobian(self.displacementField)
 
         self.vectorFieldJacobian = imageFromITKToNumpy(vectorJacob)
 
         return ImageOut
+
+    def giveChessImage(self, Im1, Im2, BlocSpeed):
+        SizeZVol = Im1.shape[0]
+        SizeXVol = Im1.shape[1]
+        SizeYVol = Im1.shape[2]
+
+        iterx = 0
+        itery = 0
+        iterz = 0
+
+        chessMap = np.zeros((SizeZVol, SizeXVol, SizeYVol))
+
+        for xRef in np.arange(0, SizeXVol - 1, BlocSpeed):
+            itery = 0
+            iterx += 1
+            for yRef in np.arange(0, SizeYVol - 1, BlocSpeed):
+                iterz = 0
+                itery += 1
+                for zRef in np.arange(0, SizeZVol - 1, BlocSpeed):
+                    iterz += 1
+
+                    xMinRef = xRef - int(BlocSpeed / 2)
+                    yMinRef = yRef - int(BlocSpeed / 2)
+                    zMinRef = zRef - int(BlocSpeed / 2)
+
+                    xMaxRef = xRef + int(BlocSpeed / 2)
+                    yMaxRef = yRef + int(BlocSpeed / 2)
+                    zMaxRef = zRef + int(BlocSpeed / 2)
+
+                    if xMinRef < 0:
+                        xMinRef = 0
+                    if yMinRef < 0:
+                        yMinRef = 0
+                    if zMinRef < 0:
+                        zMinRef = 0
+
+                    if xMaxRef >= SizeXVol:
+                        xMaxRef = SizeXVol - 1
+                    if yMaxRef >= SizeYVol:
+                        yMaxRef = SizeYVol - 1
+                    if zMaxRef >= SizeZVol:
+                        zMaxRef = SizeZVol - 1
+
+                    if ((iterz + itery + iterx) % 2) == 0:
+                        chessMap[zMinRef:zMaxRef, xMinRef:xMaxRef, yMinRef:yMaxRef] = Im1[zMinRef:zMaxRef,
+                                                                                      xMinRef:xMaxRef,
+                                                                                      yMinRef:yMaxRef]
+                    else:
+                        chessMap[zMinRef:zMaxRef, xMinRef:xMaxRef, yMinRef:yMaxRef] = Im2[zMinRef:zMaxRef,
+                                                                                      xMinRef:xMaxRef,
+                                                                                      yMinRef:yMaxRef]
+
+        return chessMap

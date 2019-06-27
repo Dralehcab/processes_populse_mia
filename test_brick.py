@@ -106,7 +106,7 @@ class FileToArray(ProcessMIA):
             self.output_array = np.array(input_image.get_data())  # Getting the 3D volume as a numpy array
 
 
-class  SmoothSpmScipy:
+class  SmoothSpmScipy(ProcessMIA):
 
     def __init__(self):
         super(SmoothSpmScipy, self).__init__()

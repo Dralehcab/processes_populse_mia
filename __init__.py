@@ -1,3 +1,4 @@
-from .Nifti_array_conversion import NiftiToArray
 from .Nifti_array_conversion import ArrayToNifti
+from .Nifti_array_conversion import NiftiToArray
 from .Register_process import RegisterProcess
+from .brain_extractor import ClinicBrainExtractor

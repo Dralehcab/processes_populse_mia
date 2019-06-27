@@ -4,9 +4,13 @@ from traits.api import CArray
 import os
 import numpy as np
 import sys
+import shutil
 
 sys.path.append('/home/broche/Code/Python/processes_populse_mia/image_processing/')
+sys.path.append('/home/broche/Code/Python/processes_populse_mia/utils/')
 from RegistrationIP import Registering
+from file_management import copy_rename
+
 
 
 class RegisterProcess(ProcessMIA):
@@ -53,7 +57,7 @@ class RegisterProcess(ProcessMIA):
 
         #Gradient Image
 
-        self.add_trait("gradient_flag",traits.Enum('True', 'False', output=False, optional=True,
+        self.add_trait("gradient_flag",traits.Enum('true', 'false', output=False, optional=True,
                                                    desc='Use the gradient Image to Perform Registration'))
 
         # Metric
@@ -121,10 +125,10 @@ class RegisterProcess(ProcessMIA):
 
         #Scaling
 
-        self.add_trait("image_scaling", traits.List(traits.Float(), [16.0, 8.0,4.0,2.0,1.0], output=False, optional=True,
+        self.add_trait("image_scaling", traits.List(traits.Float(), [16, 8, 4,2,1], output=False, optional=True,
                                         desc='Image Downscale To perform Consecutive Registration'))
 
-        self.add_trait("image_smoothing", traits.List(traits.Float(), [0.0, 0.0, 0.0, 0.0, 0.0], output=False, optional=True,
+        self.add_trait("image_smoothing", traits.List(traits.Float(), [0, 0, 0, 0, 0], output=False, optional=True,
                                         desc='Smoothing Factor for each Resolution Step'))
 
         #Ouputs
@@ -133,6 +137,8 @@ class RegisterProcess(ProcessMIA):
         self.add_trait("registered_image", trait_array)
         self.add_trait("registered_image_jason", traits.File(output=True, optional=True))
 
+
+        """
         chess_image_desc = "Output Image Chess Comparison"
         trait_array = CArray(output=True, optional=True, desc=chess_image_desc)
         self.add_trait("chess_image", trait_array)
@@ -144,12 +150,24 @@ class RegisterProcess(ProcessMIA):
         self.add_trait("vector_image_jason", traits.File(output=True, optional=True))
 
         self.add_trait("registration_info_file", traits.File(output=True, optional=True))
+        """
 
 
     def list_outputs(self):
         super(RegisterProcess, self).list_outputs()
-        return {"<undefined>":[]},{}
+        # Generating the filename by hand
 
+        if not self.fix_image_jason:
+            print('"in_file" plug is mandatory for Convert process')
+            return {}
+        else:
+            path, filename = os.path.split(self.fix_image_jason)
+            out_filename = 'R_' + filename
+            output_dict = {'registered_image_jason': os.path.join(path, out_filename)}
+
+        inheritance_dict =  {output_dict['registered_image_jason']: self.fix_image_jason}
+
+        return output_dict, inheritance_dict
 
 
     def _run_process(self):
@@ -158,7 +176,7 @@ class RegisterProcess(ProcessMIA):
         print('In process')
         # Initialising parameters dictionnary
         self.dicPar = {'Grid': [0, 0, 0], 'Inputs': {}, 'Outputs': {}, 'Metric': {}, 'Optimizer': {},
-                       'Interpolator': {}, 'Scaling': [0, 0, 0, 0, 0, 0, 0, 0]}
+                       'Interpolator': {}, 'Scaling': []}
 
 
         self.dicPar['Metric']['Sampling'] =  {'Method':'None','Percentage': 0.5}
@@ -167,12 +185,14 @@ class RegisterProcess(ProcessMIA):
 
         # Setting Image Array and Info
         if self.fix_image != [] and self.mov_image != []:
+
             image_matrix = [self.fix_image,self.mov_image,self.fix_rigid_image,self.mov_rigid_image]
             image_info_file = [self.fix_image_jason,self.mov_image_jason,self.fix_rigid_jason,self.mov_rigid_jason]
 
-
         else:
             print("Missing fixed or moving Image")
+
+
 
         self.dicPar['Inputs']['Images_Array'] = image_matrix
         self.dicPar['Inputs']['Image_info_files'] = image_info_file
@@ -183,6 +203,7 @@ class RegisterProcess(ProcessMIA):
             self.dicPar['Inputs']['InitT'] = self.initial_transform
         else:
             print('Unrecognized Initial Transform Method')
+            input()
 
 
         #Setting Grid Size
@@ -193,11 +214,12 @@ class RegisterProcess(ProcessMIA):
         else:
             print('Uncorrect Grid Vector')
             print('Setting Grid to default value [40.0,40.0,40.0]')
+            input()
             self.dicPar['Grid'] = [40.0,40.0,40.0]
 
         #Setting Gradient Image Flag
 
-        if bool(self.gradient_flag):
+        if self.gradient_flag == "true":
             self.dicPar['Metric']['GradF'] = 1
             self.dicPar['Metric']['GradM'] = 1
         else:
@@ -215,6 +237,7 @@ class RegisterProcess(ProcessMIA):
         else:
             print("Unrecognized Metric Method")
             print('Setting Metric to Default Method : MeanSquare')
+            input()
             self.dicPar['Metric']['Method'] = "Means Squares"
 
         self.dicPar['Metric']['Par'] = self.metric_parameters
@@ -226,6 +249,7 @@ class RegisterProcess(ProcessMIA):
         else:
             print("Unrecognized Sampling Strategy Method")
             print('Setting Sampling Strategy to Default Method : None')
+            input()
             self.dicPar['Metric']['Sampling']['Method'] = 'None'
 
         self.dicPar['Metric']['Sampling']['Percentage'] = self.sampling_strategy_parameters
@@ -243,6 +267,7 @@ class RegisterProcess(ProcessMIA):
             print('Setting Optimizer Method to Default Method : "Regular Step Gradient Descent":')
             self.dicPar['Optimizer']['Method'] = "Regular Step Gradient Descent"
             self.dicPar['Optimizer']['Par'] = [1.0, 0.1, 10, 0.5, 0.0001, 0, 0.0]
+            input()
 
 
         list_method = ['Never', 'Once', 'Each Iteration']
@@ -263,6 +288,7 @@ class RegisterProcess(ProcessMIA):
             print('Setting Learning Rate Method to Default value : "Never":')
             self.dicPar['Optimizer']['Par'].append(0)
             self.dicPar['Optimizer']['Par'].append(20.0)
+            input()
 
         list_method = ['None', 'Index Shift', 'Jacobian','Physical Shift']
 
@@ -274,6 +300,7 @@ class RegisterProcess(ProcessMIA):
             print("Unrecognized Optimizer Scale Method: ")
             print('Setting  Optimizer Scale Method to Default value : "None":')
             self.dicPar['Optimizer']['MethodScaling'] = 'None'
+            input()
 
 
         # Setting Interpolator
@@ -287,6 +314,7 @@ class RegisterProcess(ProcessMIA):
             print("Unrecognized Interpolator")
             print('Setting Interpolator to Default Method : "Nearest neighbor"')
             self.dicPar['Optimizer']['Method'] = 'Nearest neighbor'
+            input()
 
         #Setting Scaling
 
@@ -295,7 +323,8 @@ class RegisterProcess(ProcessMIA):
         else:
             print("Unrecognized Registration Scaling")
             print('Setting Scaling to : [16,8,4,2,1]')
-            self.dicPar['Scaling'] = [16.0, 8.0,4.0,2.0,1.0]
+            self.dicPar['Scaling'] = [16,8,4,2,1]
+            input()
 
 
         if len(self.image_smoothing) != len(self.image_scaling):
@@ -303,7 +332,43 @@ class RegisterProcess(ProcessMIA):
         else:
             print("Unrecognized Registration Smoothing")
             print('Setting Smoothing to : [0,0,0,0,0]')
-            self.dicPar['Smoothing'] = [0.0,0.0,0.0,0.0,0.0]
+            self.dicPar['Smoothing'] = [0,0,0,0,0]
+            input()
+
 
         self.R = Registering(self.dicPar)
+        print('Executing')
         self.R.Execute()
+        print(self.R.reg_method.GetMetricValue())
+        self.registered_image = self.R.returnNumpyImage()
+        self.vector_image = self.R.transformOut
+        self.chess_image =  self.R.chessImage
+
+        print('Starting Copy Rename File')
+        print(self.fix_image_jason)
+        print(self.registered_image_jason)
+
+        path, filename = os.path.split(self.fix_image_jason)
+        shutil.copy(self.fix_image_jason, path + 'tmp.json' )
+        shutil.move(path + 'tmp.json',self.registered_image_jason)
+
+        """
+        path, filename = os.path.split(self.fix_image_jason)
+        shutil.copy(self.fix_image_jason, path + 'tmp.json' )
+        shutil.move(path + 'tmp.json',self.vector_image_jason)
+
+        path, filename = os.path.split(self.fix_image_jason)
+        shutil.copy(self.fix_image_jason, path + 'tmp.json')
+        shutil.move(path + 'tmp.json',self.chess_image_jason)
+
+        print('Done')
+        """
+
+if __name__ == "__main__":
+
+    a = ProcessMIA()
+    dicPar = {'Grid': [10, 10, 10], 'Inputs': {}, 'Outputs': {}, 'Metric': {}, 'Optimizer': {},'Interpolator': {}, 'Scaling': []}
+    R = Registration(a)
+    R._run
+
+
